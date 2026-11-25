@@ -1,3 +1,16 @@
+locals {
+  cloud_config = templatefile("${path.module}/cloud-init.yaml.tpl", {
+    ssh_public_key = file(var.ssh_public_key_path)
+    vm_name        = var.vm_name
+    user_password  = var.user_password
+  })
+  tomcat_config = templatefile("${path.module}/cloud-init-tomcat.yaml.tpl", {
+     user_password  = var.user_password
+    ssh_public_key = file(var.ssh_public_key_path)
+  })
+
+}
+
 # =============================================================================
 # Data sources
 # =============================================================================
@@ -14,7 +27,7 @@ data "cloudru_evolution_compute_image_collection" "ubuntu" {
 resource "cloudru_evolution_vpc_vpc" "main" {
   project_id  = var.project_id
 
-  name        = "tf-evo-vpc"
+  name = var.vm_name
 
   description = "VPC для Terraform"
 }
@@ -38,7 +51,7 @@ resource "cloudru_evolution_compute_subnet" "example" {
 
   routed_network = true
 
-  default        = false
+  default        = true
 
   vpc_id         = cloudru_evolution_vpc_vpc.main.id
 
@@ -234,6 +247,7 @@ resource "cloudru_evolution_compute_vm" "example" {
       string_value = file(var.ssh_public_key_path)
     }
   }
+  cloud_init_userdata = base64encode(local.cloud_config)
 }
 
 # =============================================================================
@@ -258,4 +272,117 @@ output "vm_internal_ip" {
 output "external_ip" {
   description = "Публичный IP-адрес"
   value       = cloudru_evolution_compute_external_ip.example.ip_address
+}
+
+# =============================================================================
+# Tomcat VM: security rule (8080)
+# =============================================================================
+
+resource "cloudru_evolution_compute_security_group_rule" "ingress_tomcat" {
+  security_group_id = cloudru_evolution_compute_security_group.example.id
+  description       = "Tomcat доступ с моего IP"
+  direction         = "TRAFFIC_DIRECTION_INGRESS"
+  ether_type        = "ETHER_TYPE_IPV4"
+  ip_protocol       = "IP_PROTOCOL_TCP"
+  port_range        = "8080:8080"
+  remote_ip_prefix  = var.my_ip_cidr
+}
+
+# =============================================================================
+# Tomcat VM: external IP
+# =============================================================================
+
+resource "cloudru_evolution_compute_external_ip" "tomcat" {
+  project_id  = var.project_id
+  name        = "tf-evo-tomcat-ip"
+  description = "Публичный IP для Tomcat ВМ"
+  zone = {
+    name = var.zone
+  }
+}
+
+# =============================================================================
+# Tomcat VM: boot disk
+# =============================================================================
+
+resource "cloudru_evolution_compute_disk" "tomcat" {
+  project_id  = var.project_id
+  name        = "tf-evo-tomcat-disk"
+  description = "Загрузочный диск для Tomcat ВМ"
+  size        = var.disk_size
+  zone = {
+    name = var.zone
+  }
+  disk_type = {
+    name = var.disk_type
+  }
+  image = {
+    id = [for img in data.cloudru_evolution_compute_image_collection.ubuntu.images : img.id if img.name == "ubuntu-22.04"][0]
+  }
+  bootable  = true
+  encrypted = false
+  readonly  = false
+  shared    = false
+}
+
+# =============================================================================
+# Tomcat VM: network interface
+# =============================================================================
+
+resource "cloudru_evolution_compute_interface" "tomcat" {
+  project_id  = var.project_id
+  name        = "tf-evo-tomcat-interface"
+  description = "Сетевой интерфейс для Tomcat ВМ"
+  subnet = {
+    id = cloudru_evolution_compute_subnet.example.id   # та же подсеть
+  }
+  zone = {
+    name = var.zone
+  }
+  interface_security_enabled = true
+  security_groups = [{
+    id = cloudru_evolution_compute_security_group.example.id   # та же SG
+  }]
+  attach_external_ip = {
+    id = cloudru_evolution_compute_external_ip.tomcat.id
+  }
+  type = "INTERFACE_TYPE_REGULAR"
+}
+
+# =============================================================================
+# Tomcat VM
+# =============================================================================
+
+resource "cloudru_evolution_compute_vm" "tomcat" {
+  project_id  = var.project_id
+  name        = "tf-evo-tomcat"
+  description = "ВМ с Tomcat для WAR"
+  zone = {
+    name = var.zone
+  }
+  flavor = {
+    name = var.flavor
+  }
+  disks = [{
+    id = cloudru_evolution_compute_disk.tomcat.id
+  }]
+  network_interfaces = [{
+    id = cloudru_evolution_compute_interface.tomcat.id
+  }]
+
+  cloud_init_userdata = base64encode(local.tomcat_config)
+}
+
+# =============================================================================
+# Output for Tomcat VM
+# =============================================================================
+
+output "tomcat_external_ip" {
+  description = "Публичный IP Tomcat ВМ"
+  value       = cloudru_evolution_compute_external_ip.tomcat.ip_address
+}
+
+output "tomcat_internal_ip" {
+  description = "Внутренний IP Tomcat ВМ"
+  value       = cloudru_evolution_compute_interface.tomcat.ip_address
 }
