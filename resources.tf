@@ -8,6 +8,18 @@ data "cloudru_evolution_compute_image_collection" "ubuntu" {
 }
 
 # =============================================================================
+# VPC
+# =============================================================================
+
+resource "cloudru_evolution_vpc_vpc" "main" {
+  project_id  = var.project_id
+
+  name        = "tf-evo-vpc"
+
+  description = "VPC для Terraform"
+}
+
+# =============================================================================
 # Subnet
 # =============================================================================
 
@@ -28,7 +40,7 @@ resource "cloudru_evolution_compute_subnet" "example" {
 
   default        = false
 
-  vpc_id         = var.vpc_id
+  vpc_id         = cloudru_evolution_vpc_vpc.main.id
 
   dns_servers = {
     value = ["8.8.4.4", "8.8.8.8"]
