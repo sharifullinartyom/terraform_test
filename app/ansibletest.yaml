@@ -1,0 +1,126 @@
+---
+- name: Build Java project
+  hosts: web
+  become: yes
+  vars:
+    repo_dir_name: "ansible_playbook_test"
+    project_name: "example-tomcat-war"
+    repo_url: "https://github.com/sharifullinartyom/ansible_playbook_test.git"
+    build_dir: "/opt/build"
+    tools:
+      - git
+      - default-jdk
+      - maven
+
+  tasks:
+    - name: Ensure tools package is present
+      apt:
+        name: "{{ tools }}"
+        state: present
+
+    - name: Create base directory
+      file:
+        path: "{{ build_dir }}"
+        state: directory
+        mode: "0755"
+
+    - name: Clone repo
+      git:
+        repo: "{{ repo_url }}"
+        dest: "{{ build_dir }}/{{ repo_dir_name }}"
+        update: yes
+
+    - name: Clean previous build artifacts
+      file:
+        path: "{{ build_dir }}/{{ repo_dir_name }}/{{ project_name }}/target"
+        state: absent
+
+    - name: Build project with Maven
+      command: mvn clean package -DskipTests
+      args:
+        chdir: "{{ build_dir }}/{{ repo_dir_name }}/{{ project_name }}"
+      register: maven_build
+      failed_when: false
+
+    - name: Fail if Maven build failed
+      fail:
+        msg: |
+          Maven build failed.
+          Return code: {{ maven_build.rc }}
+          Stderr: {{ maven_build.stderr | default('') }}
+      when: maven_build.rc != 0
+
+    - name: Find generated WAR file
+      find:
+        paths: "{{ build_dir }}/{{ repo_dir_name }}/{{ project_name }}/target"
+        pattern: "*.war"
+        recurse: yes
+      register: war_file
+
+    - name: Fail if no WAR found
+      fail:
+        msg: |
+          WAR file not found after build.
+          Searched in: {{ build_dir }}/{{ repo_dir_name }}/{{ project_name }}/target
+      when: war_file.files | length == 0
+
+    - name: Set fact for WAR path
+      set_fact:
+        war_path: "{{ war_file.files[0].path }}"
+        war_filename: "{{ war_file.files[0].path | basename }}"
+        build_result: "success"
+
+    - name: Pull WAR to controller
+      fetch:
+        src: "{{ war_path }}"
+        dest: "/tmp/{{ project_name }}/"
+        flat: yes
+
+
+- name: Deploy Java project to prod-node
+  hosts: db
+  become: yes
+  vars:
+    app_dir: "/var/lib/tomcat9/webapps"
+    war_filename: "{{ hostvars[groups['web'][0]].war_filename }}"
+    project_name: "example-tomcat-war"
+
+  tasks:
+    - name: Ensure Tomcat9 package is present
+      apt:
+        name: tomcat9
+        state: present
+
+    - name: Validate that build was successful
+      assert:
+        that:
+          - hostvars[groups['web'][0]].build_result is defined
+          - hostvars[groups['web'][0]].build_result == "success"
+        fail_msg: "Build did not complete successfully on web node."
+
+    - name: Stop Tomcat before replacing WAR
+      systemd:
+        name: tomcat9
+        state: stopped
+      when: tomcat_stop_before_deploy | default(true) | bool
+
+    - name: Deploy WAR to Tomcat webapps
+      copy:
+        src: "/tmp/{{ project_name }}/{{ war_filename }}"
+        dest: "{{ app_dir }}/{{ war_filename }}"
+        owner: tomcat
+        group: tomcat
+        mode: "0644"
+      notify: Reload Tomcat
+
+    - name: Start Tomcat after deploy
+      systemd:
+        name: tomcat9
+        enabled: yes
+        state: started
+
+  handlers:
+    - name: Reload Tomcat
+      systemd:
+        name: tomcat9
+        state: started
