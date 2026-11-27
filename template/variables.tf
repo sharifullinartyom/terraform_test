@@ -25,7 +25,7 @@ variable "image_family" {
 
 variable "zone" {
   type    = string
-  default = "ru-central1-d"
+  default = "ru-central1-a"
 }
 
 variable "ssh_user" {

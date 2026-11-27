@@ -8,7 +8,7 @@ resource "yandex_vpc_network" "net" {
 
 resource "yandex_vpc_subnet" "subnet" {
   name           = "lab-subnet"
-  zone           = "ru-central1-d"
+  zone           = "ru-central1-a"
   network_id     = yandex_vpc_network.net.id
   v4_cidr_blocks = ["10.0.1.0/24"]
 }
