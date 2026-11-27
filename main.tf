@@ -1,14 +1,10 @@
-data "yandex_compute_image" "os" {
-  family = var.image_family
-}
-
 resource "yandex_vpc_network" "net" {
   name = "lab-network"
 }
 
 resource "yandex_vpc_subnet" "subnet" {
   name           = "lab-subnet"
-  zone           = "ru-central1-d"
+  zone           = var.zone
   network_id     = yandex_vpc_network.net.id
   v4_cidr_blocks = ["10.0.1.0/24"]
 }
@@ -22,6 +18,13 @@ resource "yandex_vpc_security_group" "sg" {
     description    = "SSH"
     v4_cidr_blocks = ["0.0.0.0/0"]
     port           = 22
+  }
+
+  ingress {
+    protocol       = "TCP"
+    description    = "Tomcat 8080"
+    v4_cidr_blocks = ["0.0.0.0/0"]
+    port           = 8080
   }
 
   egress {
@@ -59,17 +62,11 @@ resource "yandex_compute_instance" "vm" {
   }
 }
 
+data "yandex_compute_image" "os" {
+  family = var.image_family
+}
+
 # Build java project
-
-variable "repo_url" {
-  type    = string
-  default = "https://github.com/sharifullinartyom/terraform_test.git"
-}
-
-variable "private_key_path" {
-  type    = string
-  default = "~/.ssh/id_ed25519"
-}
 
 resource "terraform_data" "build" {
   triggers_replace = {
@@ -94,6 +91,58 @@ resource "terraform_data" "build" {
       "mvn clean package",
       "ls -la target/",
     ]
+  }
+
+  provisioner "file" {
+    source      = "/home/ubuntu/project/app/target/SimpleTomcatWebApp.war"
+    destination = "./SimpleTomcatWebApp.war"
+
+    connection {
+      type        = "ssh"
+      user        = var.ssh_user
+      private_key = file(pathexpand(var.private_key_path))
+      host        = yandex_compute_instance.vm["builder"].network_interface[0].nat_ip_address
+    }
+  }
+}
+
+# Deploy war with Tomcat9
+
+resource "terraform_data" "deploy" {
+  triggers_replace = [terraform_data.build]
+
+  provisioner "file" {
+    source      = "./SimpleTomcatWebApp.war"
+    destination = "/tmp/SimpleTomcatWebApp.war"
+
+    connection {
+      type        = "ssh"
+      user        = var.ssh_user
+      private_key = file(pathexpand(var.private_key_path))
+      host        = yandex_compute_instance.vm["deployer"].network_interface[0].nat_ip_address
+    }
+  }
+
+  provisioner "remote-exec" {
+    inline = [
+      "sudo apt update",
+      "sudo apt install -y tomcat9",
+      "sudo systemctl stop tomcat9 || true",
+      "sudo rm -rf /var/lib/tomcat9/webapps/SimpleTomcatWebApp",
+      "sudo cp /tmp/SimpleTomcatWebApp.war /var/lib/tomcat9/webapps/",
+      "sudo chown tomcat9:tomcat9 /var/lib/tomcat9/webapps/SimpleTomcatWebApp.war",
+      "sudo systemctl restart tomcat9",
+      "sleep 15",
+      "echo '=== Проверка приложения: ==='",
+      "curl -s -o /dev/null -w 'HTTP status: %{http_code}\n' http://localhost:8080/SimpleTomcatWebApp/",
+    ]
+
+    connection {
+      type        = "ssh"
+      user        = var.ssh_user
+      private_key = file(pathexpand(var.private_key_path))
+      host        = yandex_compute_instance.vm["deployer"].network_interface[0].nat_ip_address
+    }
   }
 }
 

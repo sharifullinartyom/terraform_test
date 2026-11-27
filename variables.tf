@@ -20,7 +20,7 @@ variable "vm_params" {
 
 variable "image_family" {
   type    = string
-  default = "ubuntu-2404-lts"
+  default = "ubuntu-2004-lts"
 }
 
 variable "zone" {
@@ -30,9 +30,19 @@ variable "zone" {
 
 variable "ssh_user" {
   type    = string
-  default = "user1"
+  default = "ubuntu"
 }
 
 variable "ssh_public_key" {
   type = string
+}
+
+variable "repo_url" {
+  type    = string
+  default = "https://github.com/sharifullinartyom/terraform_test.git"
+}
+
+variable "private_key_path" {
+  type    = string
+  default = "~/.ssh/id_ed25519"
 }
