@@ -49,51 +49,13 @@ resource "yandex_compute_instance" "vm" {
   }
 
   network_interface {
-    subnet_id          = yandex_vpc_subnet.subnet.id
-    nat                = true
+    subnet_id = yandex_vpc_subnet.subnet.id
+    nat       = true
     security_group_ids = [yandex_vpc_security_group.sg.id]
   }
 
   metadata = {
     ssh-keys = "${var.ssh_user}:${var.ssh_public_key}"
-  }
-}
-
-# Build java project
-
-variable "repo_url" {
-  type    = string
-  default = "https://github.com/sharifullinartyom/terraform_test.git"
-}
-
-variable "private_key_path" {
-  type    = string
-  default = "~/.ssh/id_ed25519"
-}
-
-resource "terraform_data" "build" {
-  triggers_replace = {
-    build_number = timestamp()
-  }
-
-  connection {
-    type        = "ssh"
-    user        = var.ssh_user
-    private_key = file(var.private_key_path)
-    host        = yandex_compute_instance.vm["builder"].network_interface[0].nat_ip_address
-  }
-
-  provisioner "remote-exec" {
-    inline = [
-      "sudo apt update",
-      "sudo apt install -y git maven openjdk-17-jdk",
-      "mvn -version",
-      "rm -rf ~/project",
-      "git clone ${var.repo_url} ~/project",
-      "cd ~/project/app",
-      "mvn clean package",
-      "ls -la target/",
-    ]
   }
 }
 
