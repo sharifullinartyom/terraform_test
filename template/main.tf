@@ -14,8 +14,8 @@ resource "yandex_vpc_subnet" "subnet" {
 }
 
 resource "yandex_vpc_security_group" "sg" {
-  name       = "lab-sg"
-  network_id = yandex_vpc_network.net.id
+  name       = "ssh-access"
+  network_id = "enpu5sgth6g6lhe99s3r"
 
   ingress {
     protocol       = "TCP"
@@ -28,7 +28,6 @@ resource "yandex_vpc_security_group" "sg" {
     protocol       = "ANY"
     description    = "all out"
     v4_cidr_blocks = ["0.0.0.0/0"]
-    port           = -1
   }
 }
 
