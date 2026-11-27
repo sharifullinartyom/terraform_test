@@ -15,7 +15,7 @@ resource "yandex_vpc_subnet" "subnet" {
 
 resource "yandex_vpc_security_group" "sg" {
   name       = "ssh-access"
-  network_id = "enpu5sgth6g6lhe99s3r" 
+  network_id = yandex_vpc_network.net.id
 
   ingress {
     protocol       = "TCP"
