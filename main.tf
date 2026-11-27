@@ -94,7 +94,9 @@ resource "terraform_data" "build" {
   }
 
   provisioner "local-exec" {
-    command = "scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ${pathexpand(var.private_key_path)} ${var.ssh_user}@${yandex_compute_instance.vm[\"builder\"].network_interface[0].nat_ip_address}:/home/ubuntu/project/app/target/SimpleTomcatWebApp.war ./SimpleTomcatWebApp.war"
+    command = <<-SCPEOT
+      scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ${pathexpand(var.private_key_path)} ${var.ssh_user}@${yandex_compute_instance.vm["builder"].network_interface[0].nat_ip_address}:/home/ubuntu/project/app/target/SimpleTomcatWebApp.war ./SimpleTomcatWebApp.war
+    SCPEOT
   }
 }
 
