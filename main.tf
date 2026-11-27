@@ -134,7 +134,8 @@ resource "terraform_data" "deploy" {
       "sudo systemctl restart tomcat9",
       "sleep 15",
       "echo '=== Проверка приложения: ==='",
-      "curl -s -o /dev/null -w 'HTTP status: %{http_code}\n' http://localhost:8080/SimpleTomcatWebApp/",
+      "curl -s -o /dev/null -w 'HTTP status: %%{http_code}\n' http://localhost:8080/SimpleTomcatWebApp/",
+
     ]
 
     connection {
