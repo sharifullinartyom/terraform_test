@@ -96,7 +96,6 @@ resource "terraform_data" "build" {
   provisioner "local-exec" {
     command = "scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ${pathexpand(var.private_key_path)} ${var.ssh_user}@${yandex_compute_instance.vm[\"builder\"].network_interface[0].nat_ip_address}:/home/ubuntu/project/app/target/SimpleTomcatWebApp.war ./SimpleTomcatWebApp.war"
   }
-  
 }
 
 # Deploy war with Tomcat9
@@ -118,17 +117,18 @@ resource "terraform_data" "deploy" {
 
   provisioner "remote-exec" {
     inline = [
-      "sudo apt update",
-      "sudo apt install -y tomcat9",
-      "sudo systemctl stop tomcat9 || true",
-      "sudo rm -rf /var/lib/tomcat9/webapps/SimpleTomcatWebApp",
-      "sudo cp /tmp/SimpleTomcatWebApp.war /var/lib/tomcat9/webapps/",
-      "sudo chown tomcat9:tomcat9 /var/lib/tomcat9/webapps/SimpleTomcatWebApp.war",
-      "sudo systemctl restart tomcat9",
-      "sleep 15",
-      "echo '=== Проверка приложения: ==='",
-      "curl -s -o /dev/null -w 'HTTP status: %%{http_code}\n' http://localhost:8080/SimpleTomcatWebApp/",
-
+      <<-EOT
+        sudo apt update
+        sudo apt install -y tomcat9
+        sudo systemctl stop tomcat9 || true
+        sudo rm -rf /var/lib/tomcat9/webapps/SimpleTomcatWebApp
+        sudo cp /tmp/SimpleTomcatWebApp.war /var/lib/tomcat9/webapps/
+        sudo chown tomcat9:tomcat9 /var/lib/tomcat9/webapps/SimpleTomcatWebApp.war
+        sudo systemctl restart tomcat9
+        sleep 15
+        echo '=== Проверка приложения: ==='
+        curl -s -o /dev/null -w 'HTTP status: %%{http_code}\n' http://localhost:8080/SimpleTomcatWebApp/
+      EOT
     ]
 
     connection {
