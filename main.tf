@@ -93,17 +93,10 @@ resource "terraform_data" "build" {
     ]
   }
 
-  provisioner "file" {
-    source      = "/home/ubuntu/project/app/target/SimpleTomcatWebApp.war"
-    destination = "./SimpleTomcatWebApp.war"
-
-    connection {
-      type        = "ssh"
-      user        = var.ssh_user
-      private_key = file(pathexpand(var.private_key_path))
-      host        = yandex_compute_instance.vm["builder"].network_interface[0].nat_ip_address
-    }
+  provisioner "local-exec" {
+    command = "scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ${pathexpand(var.private_key_path)} ${var.ssh_user}@${yandex_compute_instance.vm[\"builder\"].network_interface[0].nat_ip_address}:/home/ubuntu/project/app/target/SimpleTomcatWebApp.war ./SimpleTomcatWebApp.war"
   }
+  
 }
 
 # Deploy war with Tomcat9
